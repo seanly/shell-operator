@@ -3,6 +3,7 @@ package shell_operator
 import (
 	"context"
 	"fmt"
+	"github.com/flant/shell-operator/pkg/webhook/mutating"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -173,6 +174,12 @@ func AssembleShellOperator(op *ShellOperator, hooksDir string, tempDir string, d
 		return fmt.Errorf("initialize HookManager fail: %s", err)
 	}
 
+	// Load mutating hooks
+	err = op.InitMutatingWebhookManager()
+	if err != nil {
+		return fmt.Errorf("initialize MutatingWebhookManager fail: %s", err)
+	}
+
 	// Load validation hooks.
 	err = op.InitValidatingWebhookManager()
 	if err != nil {
@@ -215,6 +222,13 @@ func SetupEventManagers(op *ShellOperator) {
 
 // SetupHookManagers instantiates different hook managers.
 func SetupHookManagers(op *ShellOperator, hooksDir string, tempDir string) {
+
+	// Initialize validating webhooks manager
+	op.MutatingWebhookManager = mutating.NewWebhookManager()
+	op.MutatingWebhookManager.WithKubeClient(op.KubeClient)
+	op.MutatingWebhookManager.Settings = app.MutatingWebhookSettings
+	op.MutatingWebhookManager.Namespace = app.Namespace
+
 	// Initialize validating webhooks manager
 	op.ValidatingWebhookManager = validating.NewWebhookManager()
 	op.ValidatingWebhookManager.WithKubeClient(op.KubeClient)

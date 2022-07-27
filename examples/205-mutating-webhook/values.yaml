@@ -1,0 +1,5 @@
+shellOperator:
+  image: localhost:5000/shell-operator:example-205
+  # Important: this name should be the same as in gen-certs.sh and csr.json.
+  mutatingWebhookServiceName: example-205-mutating-service
+  mutatingWebhookConfigurationName: example-205

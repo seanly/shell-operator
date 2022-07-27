@@ -2,10 +2,24 @@ package app
 
 import (
 	"github.com/flant/shell-operator/pkg/webhook/conversion"
+	"github.com/flant/shell-operator/pkg/webhook/mutating"
 	"github.com/flant/shell-operator/pkg/webhook/server"
 	"github.com/flant/shell-operator/pkg/webhook/validating"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
+
+var MutatingWebhookSettings = &mutating.WebhookSettings{
+	Settings: server.Settings{
+		ServerCertPath: "/mutating-certs/tls.crt",
+		ServerKeyPath:  "/mutating-certs/tls.key",
+		ClientCAPaths:  nil,
+		ServiceName:    "shell-operator-mutating-svc",
+		ListenAddr:     "0.0.0.0",
+		ListenPort:     "9680",
+	},
+	CAPath:            "/mutating-certs/ca.crt",
+	ConfigurationName: "shell-operator-hooks",
+}
 
 var ValidatingWebhookSettings = &validating.WebhookSettings{
 	Settings: server.Settings{
