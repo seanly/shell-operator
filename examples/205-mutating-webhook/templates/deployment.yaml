@@ -4,20 +4,20 @@ kind: Deployment
 metadata:
   name: shell-operator
   labels:
-    heritage: example-204
-    app: shell-operator-example-204
+    heritage: example-205
+    app: shell-operator-example-205
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: shell-operator-example-204
+      app: shell-operator-example-205
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        heritage: example-204
-        app: shell-operator-example-204
+        heritage: example-205
+        app: shell-operator-example-205
       annotations:
         checksum/hook: {{ .Files.Get "hooks/mutating.sh" | sha256sum }}
     spec:
@@ -30,16 +30,16 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        - name: VALIDATING_WEBHOOK_SERVICE_NAME
-          value: {{ .Values.shellOperator.validatingWebhookServiceName | quote }}
-        - name: VALIDATING_WEBHOOK_CONFIGURATION_NAME
-          value: {{ .Values.shellOperator.validatingWebhookConfigurationName | quote }}
+        - name: MUTATING_WEBHOOK_SERVICE_NAME
+          value: {{ .Values.shellOperator.mutatingWebhookServiceName | quote }}
+        - name: MUTATING_WEBHOOK_CONFIGURATION_NAME
+          value: {{ .Values.shellOperator.mutatingWebhookConfigurationName | quote }}
         volumeMounts:
-        - name: validating-certs
-          mountPath: /validating-certs/
+        - name: mutating-certs
+          mountPath: /mutating-certs/
           readOnly: true
-      serviceAccountName: example-204-acc
+      serviceAccountName: example-205-acc
       volumes:
-      - name: validating-certs
+      - name: mutating-certs
         secret:
-          secretName: example-204-validating-certs
+          secretName: example-205-mutating-certs

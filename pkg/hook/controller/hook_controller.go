@@ -4,6 +4,8 @@ import (
 	. "github.com/flant/shell-operator/pkg/hook/binding_context"
 	. "github.com/flant/shell-operator/pkg/hook/types"
 	. "github.com/flant/shell-operator/pkg/kube_events_manager/types"
+	"github.com/flant/shell-operator/pkg/webhook/mutating"
+	. "github.com/flant/shell-operator/pkg/webhook/mutating/types"
 	. "github.com/flant/shell-operator/pkg/webhook/validating/types"
 
 	"github.com/flant/shell-operator/pkg/kube_events_manager"
@@ -38,11 +40,13 @@ type HookController interface {
 	InitKubernetesBindings([]OnKubernetesEventConfig, kube_events_manager.KubeEventsManager)
 	InitScheduleBindings([]ScheduleConfig, schedule_manager.ScheduleManager)
 	InitValidatingBindings([]ValidatingConfig, *validating.WebhookManager)
+	InitMutatingBindings([]MutatingConfig, *mutating.WebhookManager)
 	InitConversionBindings([]ConversionConfig, *conversion.WebhookManager)
 
 	CanHandleKubeEvent(kubeEvent KubeEvent) bool
 	CanHandleScheduleEvent(crontab string) bool
 	CanHandleValidatingEvent(event ValidatingEvent) bool
+	CanHandleMutatingEvent(event MutatingEvent) bool
 	CanHandleConversionEvent(event conversion.Event, rule conversion.Rule) bool
 
 	// These method should call an underlying *Binding*Controller to get binding context
@@ -51,6 +55,7 @@ type HookController interface {
 	HandleKubeEvent(event KubeEvent, createTasksFn func(BindingExecutionInfo))
 	HandleScheduleEvent(crontab string, createTasksFn func(BindingExecutionInfo))
 	HandleValidatingEvent(event ValidatingEvent, createTasksFn func(BindingExecutionInfo))
+	HandleMutatingEvent(event MutatingEvent, createTasksFn func(BindingExecutionInfo))
 	HandleConversionEvent(event conversion.Event, rule conversion.Rule, createTasksFn func(BindingExecutionInfo))
 
 	UnlockKubernetesEvents()
@@ -62,6 +67,7 @@ type HookController interface {
 	DisableScheduleBindings()
 
 	EnableValidatingBindings()
+	EnableMutatingBindings()
 
 	EnableConversionBindings()
 
@@ -81,10 +87,12 @@ type hookController struct {
 	KubernetesController KubernetesBindingsController
 	ScheduleController   ScheduleBindingsController
 	ValidatingController ValidatingBindingsController
+	MutatingController   MutatingBindingsController
 	ConversionController ConversionBindingsController
 	kubernetesBindings   []OnKubernetesEventConfig
 	scheduleBindings     []ScheduleConfig
 	validatingBindings   []ValidatingConfig
+	mutatingBindings   	 []MutatingConfig
 	conversionBindings   []ConversionConfig
 }
 
@@ -124,6 +132,18 @@ func (hc *hookController) InitValidatingBindings(bindings []ValidatingConfig, we
 	hc.validatingBindings = bindings
 }
 
+func (hc *hookController) InitMutatingBindings(bindings []MutatingConfig, webhookMgr *mutating.WebhookManager) {
+	if len(bindings) == 0 {
+		return
+	}
+
+	bindingCtrl := NewMutatingBindingsController()
+	bindingCtrl.WithWebhookManager(webhookMgr)
+	bindingCtrl.WithMutatingBindings(bindings)
+	hc.MutatingController = bindingCtrl
+	hc.mutatingBindings = bindings
+}
+
 func (hc *hookController) InitConversionBindings(bindings []ConversionConfig, webhookMgr *conversion.WebhookManager) {
 	if len(bindings) == 0 {
 		return
@@ -153,6 +173,13 @@ func (hc *hookController) CanHandleScheduleEvent(crontab string) bool {
 func (hc *hookController) CanHandleValidatingEvent(event ValidatingEvent) bool {
 	if hc.ValidatingController != nil {
 		return hc.ValidatingController.CanHandleEvent(event)
+	}
+	return false
+}
+
+func (hc *hookController) CanHandleMutatingEvent(event MutatingEvent) bool {
+	if hc.MutatingController != nil {
+		return hc.MutatingController.CanHandleEvent(event)
 	}
 	return false
 }
@@ -195,6 +222,16 @@ func (hc *hookController) HandleValidatingEvent(event ValidatingEvent, createTas
 		return
 	}
 	execInfo := hc.ValidatingController.HandleEvent(event)
+	if createTasksFn != nil {
+		createTasksFn(execInfo)
+	}
+}
+
+func (hc *hookController) HandleMutatingEvent(event MutatingEvent, createTasksFn func(BindingExecutionInfo)) {
+	if hc.MutatingController == nil {
+		return
+	}
+	execInfo := hc.MutatingController.HandleEvent(event)
 	if createTasksFn != nil {
 		createTasksFn(execInfo)
 	}
@@ -266,6 +303,12 @@ func (hc *hookController) EnableValidatingBindings() {
 	}
 }
 
+func (hc *hookController) EnableMutatingBindings() {
+	if hc.MutatingController != nil {
+		hc.MutatingController.EnableMutatingBindings()
+	}
+}
+
 func (hc *hookController) EnableConversionBindings() {
 	if hc.ConversionController != nil {
 		hc.ConversionController.EnableConversionBindings()
@@ -302,6 +345,13 @@ func (hc *hookController) getIncludeSnapshotsFrom(bindingType BindingType, bindi
 		}
 	case KubernetesValidating:
 		for _, binding := range hc.validatingBindings {
+			if bindingName == binding.BindingName {
+				includeSnapshotsFrom = binding.IncludeSnapshotsFrom
+				break
+			}
+		}
+	case KubernetesMutating:
+		for _, binding := range hc.mutatingBindings {
 			if bindingName == binding.BindingName {
 				includeSnapshotsFrom = binding.IncludeSnapshotsFrom
 				break

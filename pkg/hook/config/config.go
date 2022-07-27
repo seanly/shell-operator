@@ -22,6 +22,7 @@ type HookConfig struct {
 	Schedules            []ScheduleConfig
 	OnKubernetesEvents   []OnKubernetesEventConfig
 	KubernetesValidating []ValidatingConfig
+	KubernetesMutating   []MutatingConfig
 	KubernetesConversion []ConversionConfig
 	Settings             *Settings
 }
@@ -92,7 +93,7 @@ func (c *HookConfig) ConvertAndCheck(data []byte) error {
 func (c *HookConfig) Bindings() []BindingType {
 	res := []BindingType{}
 
-	for _, binding := range []BindingType{OnStartup, Schedule, OnKubernetesEvent, KubernetesValidating, KubernetesConversion} {
+	for _, binding := range []BindingType{OnStartup, Schedule, OnKubernetesEvent, KubernetesValidating, KubernetesMutating, KubernetesConversion} {
 		if c.HasBinding(binding) {
 			res = append(res, binding)
 		}
@@ -112,6 +113,8 @@ func (c *HookConfig) HasBinding(binding BindingType) bool {
 		return len(c.OnKubernetesEvents) > 0
 	case KubernetesValidating:
 		return len(c.KubernetesValidating) > 0
+	case KubernetesMutating:
+		return len(c.KubernetesMutating) > 0
 	case KubernetesConversion:
 		return len(c.KubernetesConversion) > 0
 	}

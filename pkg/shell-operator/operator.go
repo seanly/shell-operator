@@ -24,6 +24,8 @@ import (
 	utils "github.com/flant/shell-operator/pkg/utils/labels"
 	"github.com/flant/shell-operator/pkg/utils/measure"
 	"github.com/flant/shell-operator/pkg/webhook/conversion"
+	"github.com/flant/shell-operator/pkg/webhook/mutating"
+	. "github.com/flant/shell-operator/pkg/webhook/mutating/types"
 	"github.com/flant/shell-operator/pkg/webhook/validating"
 	. "github.com/flant/shell-operator/pkg/webhook/validating/types"
 )
@@ -51,6 +53,8 @@ type ShellOperator struct {
 
 	ValidatingWebhookManager *validating.WebhookManager
 	ConversionWebhookManager *conversion.WebhookManager
+
+	MutatingWebhookManager *mutating.WebhookManager
 }
 
 func NewShellOperator() *ShellOperator {
@@ -150,6 +154,89 @@ func (op *ShellOperator) InitHookManager() (err error) {
 
 	return nil
 }
+
+func (op *ShellOperator) InitMutatingWebhookManager() (err error) {
+
+	if op.HookManager == nil || op.MutatingWebhookManager == nil {
+		return
+	}
+	// Do not init MutatingWebhook if there are no KubernetesMutating hooks.
+	hookNames, _ := op.HookManager.GetHooksInOrder(KubernetesMutating)
+	if len(hookNames) == 0 {
+		return
+	}
+
+	err = op.MutatingWebhookManager.Init()
+	if err != nil {
+		log.Errorf("MutatingWebhookManager init: %v", err)
+		return err
+	}
+
+	for _, hookName := range hookNames {
+		h := op.HookManager.GetHook(hookName)
+		h.HookController.EnableMutatingBindings()
+	}
+
+	// Define handler for MutatingEvent
+	op.MutatingWebhookManager.WithMutatingEventHandler(func(event MutatingEvent) (*MutatingResponse, error) {
+		logLabels := map[string]string{
+			"event.id": uuid.NewV4().String(),
+			"binding":  string(KubernetesMutating),
+		}
+		logEntry := log.WithFields(utils.LabelsToLogFields(logLabels))
+		logEntry.Debugf("Handle '%s' event '%s' '%s'", string(KubernetesMutating), event.ConfigurationId, event.WebhookId)
+
+		var tasks []task.Task
+		op.HookManager.HandleMutatingEvent(event, func(hook *hook.Hook, info controller.BindingExecutionInfo) {
+			newTask := task.NewTask(HookRun).
+				WithMetadata(HookMetadata{
+					HookName:       hook.Name,
+					BindingType:    KubernetesMutating,
+					BindingContext: info.BindingContext,
+					AllowFailure:   info.AllowFailure,
+					Binding:        info.Binding,
+					Group:          info.Group,
+				}).
+				WithLogLabels(logLabels)
+			tasks = append(tasks, newTask)
+		})
+
+		// Assert exactly one task is created.
+		if len(tasks) == 0 {
+			logEntry.Errorf("Possible bug!!! No hook found for '%s' event '%s' '%s'", string(KubernetesMutating), event.ConfigurationId, event.WebhookId)
+			return nil, fmt.Errorf("no hook found for '%s' '%s'", event.ConfigurationId, event.WebhookId)
+		}
+
+		if len(tasks) > 1 {
+			logEntry.Errorf("Possible bug!!! %d hooks found for '%s' event '%s' '%s'", len(tasks), string(KubernetesMutating), event.ConfigurationId, event.WebhookId)
+		}
+
+		res := op.TaskHandler(tasks[0])
+
+		if res.Status == "Fail" {
+			return &MutatingResponse{
+				Allowed: false,
+				Message: "Hook failed",
+			}, nil
+		}
+
+		mutatingProp := tasks[0].GetProp("mutatingResponse")
+		log.Infof("--//DEBUG: %+v", mutatingProp)
+		mutatingResponse, ok := mutatingProp.(*MutatingResponse)
+		if !ok {
+			logEntry.Errorf("'mutatingResponse' task prop is not of type *MutatingResponse: %T", mutatingProp)
+			return nil, fmt.Errorf("hook task prop error")
+		}
+		return mutatingResponse, nil
+	})
+
+	err = op.MutatingWebhookManager.Start()
+	if err != nil {
+		log.Errorf("MutatingWebhookManager start: %v", err)
+	}
+	return err
+}
+
 
 // InitValidatingWebhookManager adds kubernetesValidating hooks
 // to a WebhookManager and set a validating event handler.
@@ -634,6 +721,12 @@ func (op *ShellOperator) HandleRunHook(t task.Task, taskHook *hook.Hook, hookMet
 	if result.ValidatingResponse != nil {
 		t.SetProp("validatingResponse", result.ValidatingResponse)
 		taskLogEntry.Infof("ValidatingResponse from hook: %s", result.ValidatingResponse.Dump())
+	}
+
+	// Save mutatingResponse in task props for future use.
+	if result.MutatingResponse != nil {
+		t.SetProp("mutatingResponse", result.MutatingResponse)
+		taskLogEntry.Infof("MutatingResponse from hook: %s", result.MutatingResponse.Dump())
 	}
 
 	// Save conversionResponse in task props for future use.

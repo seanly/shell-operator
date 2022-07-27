@@ -2,10 +2,24 @@ package app
 
 import (
 	"github.com/flant/shell-operator/pkg/webhook/conversion"
+	"github.com/flant/shell-operator/pkg/webhook/mutating"
 	"github.com/flant/shell-operator/pkg/webhook/server"
 	"github.com/flant/shell-operator/pkg/webhook/validating"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
+
+var MutatingWebhookSettings = &mutating.WebhookSettings{
+	Settings: server.Settings{
+		ServerCertPath: "/mutating-certs/tls.crt",
+		ServerKeyPath:  "/mutating-certs/tls.key",
+		ClientCAPaths:  nil,
+		ServiceName:    "shell-operator-mutating-svc",
+		ListenAddr:     "0.0.0.0",
+		ListenPort:     "9680",
+	},
+	CAPath:            "/mutating-certs/ca.crt",
+	ConfigurationName: "shell-operator-hooks",
+}
 
 var ValidatingWebhookSettings = &validating.WebhookSettings{
 	Settings: server.Settings{
@@ -57,6 +71,33 @@ func DefineValidatingWebhookFlags(cmd *kingpin.CmdClause) {
 	cmd.Flag("validating-webhook-client-ca", "A path to a server certificate for ValidatingWebhookConfiguration. Can be set with $VALIDATING_WEBHOOK_CLIENT_CA.").
 		Envar("VALIDATING_WEBHOOK_CLIENT_CA").
 		StringsVar(&ValidatingWebhookSettings.ClientCAPaths)
+}
+
+// DefineMutatingWebhookFlags defines flags for ValidatingWebhook server.
+func DefineMutatingWebhookFlags(cmd *kingpin.CmdClause) {
+	cmd.Flag("mutating-webhook-configuration-name", "A name of a MutatingWebhookConfiguration resource. Can be set with $MUTATING_WEBHOOK_CONFIGURATION_NAME.").
+		Envar("MUTATING_WEBHOOK_CONFIGURATION_NAME").
+		Default(MutatingWebhookSettings.ConfigurationName).
+		StringVar(&MutatingWebhookSettings.ConfigurationName)
+	cmd.Flag("mutating-webhook-service-name", "A name of a service used in MutatingWebhookConfiguration. Can be set with $MUTATING_WEBHOOK_SERVICE_NAME.").
+		Envar("MUTATING_WEBHOOK_SERVICE_NAME").
+		Default(MutatingWebhookSettings.ServiceName).
+		StringVar(&MutatingWebhookSettings.ServiceName)
+	cmd.Flag("mutating-webhook-server-cert", "A path to a server certificate for service used in MutatingWebhookConfiguration. Can be set with $MUTATING_WEBHOOK_SERVER_CERT.").
+		Envar("MUTATING_WEBHOOK_SERVER_CERT").
+		Default(MutatingWebhookSettings.ServerCertPath).
+		StringVar(&MutatingWebhookSettings.ServerCertPath)
+	cmd.Flag("mutating-webhook-server-key", "A path to a server private key for service used in MutatingWebhookConfiguration. Can be set with $MUTATING_WEBHOOK_SERVER_KEY.").
+		Envar("MUTATING_WEBHOOK_SERVER_KEY").
+		Default(MutatingWebhookSettings.ServerKeyPath).
+		StringVar(&MutatingWebhookSettings.ServerKeyPath)
+	cmd.Flag("mutating-webhook-ca", "A path to a ca certificate for MutatingWebhookConfiguration. Can be set with $MUTATING_WEBHOOK_CA.").
+		Envar("MUTATING_WEBHOOK_CA").
+		Default(MutatingWebhookSettings.CAPath).
+		StringVar(&MutatingWebhookSettings.CAPath)
+	cmd.Flag("mutating-webhook-client-ca", "A path to a server certificate for MutatingWebhookConfiguration. Can be set with $MUTATING_WEBHOOK_CLIENT_CA.").
+		Envar("MUTATING_WEBHOOK_CLIENT_CA").
+		StringsVar(&MutatingWebhookSettings.ClientCAPaths)
 }
 
 // DefineConversionWebhookFlags defines flags for ConversionWebhook server.
