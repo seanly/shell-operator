@@ -177,7 +177,7 @@ func (op *ShellOperator) InitMutatingWebhookManager() (err error) {
 		h.HookController.EnableMutatingBindings()
 	}
 
-	// Define handler for ValidatingEvent
+	// Define handler for MutatingEvent
 	op.MutatingWebhookManager.WithMutatingEventHandler(func(event MutatingEvent) (*MutatingResponse, error) {
 		logLabels := map[string]string{
 			"event.id": uuid.NewV4().String(),
@@ -221,6 +221,7 @@ func (op *ShellOperator) InitMutatingWebhookManager() (err error) {
 		}
 
 		mutatingProp := tasks[0].GetProp("mutatingResponse")
+		log.Infof("--//DEBUG: %+v", mutatingProp)
 		mutatingResponse, ok := mutatingProp.(*MutatingResponse)
 		if !ok {
 			logEntry.Errorf("'mutatingResponse' task prop is not of type *MutatingResponse: %T", mutatingProp)
@@ -720,6 +721,12 @@ func (op *ShellOperator) HandleRunHook(t task.Task, taskHook *hook.Hook, hookMet
 	if result.ValidatingResponse != nil {
 		t.SetProp("validatingResponse", result.ValidatingResponse)
 		taskLogEntry.Infof("ValidatingResponse from hook: %s", result.ValidatingResponse.Dump())
+	}
+
+	// Save mutatingResponse in task props for future use.
+	if result.MutatingResponse != nil {
+		t.SetProp("mutatingResponse", result.MutatingResponse)
+		taskLogEntry.Infof("MutatingResponse from hook: %s", result.MutatingResponse.Dump())
 	}
 
 	// Save conversionResponse in task props for future use.

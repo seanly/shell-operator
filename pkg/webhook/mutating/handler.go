@@ -131,8 +131,17 @@ func (h *WebhookHandler) HandleReviewRequest(path string, body []byte) (*v1.Admi
 	}
 
 	response.Response.Allowed = true
-	response.Response.PatchType = v1JSONPatchType
-	response.Response.Patch = mutatingResponse.Patch
+
+	patchOps := mutatingResponse.PatchOps
+	if len(patchOps) > 0 {
+		patchBytes, err := json.Marshal(patchOps)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal patch operations %v: %v", patchOps, err)
+		}
+		response.Response.Patch = patchBytes
+		patchType := v1.PatchTypeJSONPatch
+		response.Response.PatchType = &patchType
+	}
 
 	return response, nil
 }

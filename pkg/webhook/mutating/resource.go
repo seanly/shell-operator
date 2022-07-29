@@ -64,7 +64,7 @@ func (w *WebhookResource) UpdateConfiguration() error {
 }
 
 func (w *WebhookResource) DeleteConfiguration() error {
-	return w.KubeClient.AdmissionregistrationV1().ValidatingWebhookConfigurations().
+	return w.KubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().
 		Delete(context.TODO(), w.ConfigurationName, metav1.DeleteOptions{})
 }
 
@@ -98,14 +98,14 @@ func (w *WebhookResource) CreateOrUpdateConfiguration(conf *v1.MutatingWebhookCo
 	if len(list.Items) == 0 {
 		_, err = client.Create(context.TODO(), conf, metav1.CreateOptions{})
 		if err != nil {
-			log.Errorf("Create ValidatingWebhookConfiguration/%s: %v", conf.Name, err)
+			log.Errorf("Create MutatingWebhookConfiguration/%s: %v", conf.Name, err)
 		}
 	} else {
 		newConf := list.Items[0]
 		newConf.Webhooks = conf.Webhooks
 		_, err = client.Update(context.TODO(), &newConf, metav1.UpdateOptions{})
 		if err != nil {
-			log.Errorf("Replace ValidatingWebhookConfiguration/%s: %v", conf.Name, err)
+			log.Errorf("Replace MutatingWebhookConfiguration/%s: %v", conf.Name, err)
 		}
 	}
 	return nil

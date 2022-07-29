@@ -11,10 +11,17 @@ import (
 )
 
 type MutatingResponse struct {
-	Allowed  bool     `json:"allowed"`
-	Message  string   `json:"message,omitempty"`
-	Patch    []byte   `json:"patch,omitempty"`
-	Warnings []string `json:"warnings,omitempty"`
+	Allowed  bool     			`json:"allowed"`
+	Message  string   			`json:"message,omitempty"`
+	PatchOps []patchOperation   `json:"patchOps,omitempty"`
+	Warnings []string 			`json:"warnings,omitempty"`
+}
+
+// patchOperation represents a RFC6902 JSON patch operation.
+type patchOperation struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value,omitempty"`
 }
 
 func MutatingResponseFromFile(filePath string) (*MutatingResponse, error) {

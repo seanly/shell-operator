@@ -15,6 +15,7 @@ import (
 
 	. "github.com/flant/shell-operator/pkg/hook/binding_context"
 	. "github.com/flant/shell-operator/pkg/hook/types"
+	. "github.com/flant/shell-operator/pkg/webhook/mutating/types"
 	. "github.com/flant/shell-operator/pkg/webhook/validating/types"
 
 	"github.com/flant/shell-operator/pkg/app"
@@ -34,6 +35,7 @@ type HookResult struct {
 	Metrics              []operation.MetricOperation
 	ConversionResponse   *conversion.Response
 	ValidatingResponse   *ValidatingResponse
+	MutatingResponse     *MutatingResponse
 	KubernetesPatchBytes []byte
 }
 
@@ -104,6 +106,11 @@ func (h *Hook) Run(bindingType BindingType, context []BindingContext, logLabels 
 		return nil, err
 	}
 
+	mutatingPath, err := h.prepareMutatingResponseFile()
+	if err != nil {
+		return nil, err
+	}
+
 	conversionPath, err := h.prepareConversionResponseFile()
 	if err != nil {
 		return nil, err
@@ -132,6 +139,7 @@ func (h *Hook) Run(bindingType BindingType, context []BindingContext, logLabels 
 		envs = append(envs, fmt.Sprintf("METRICS_PATH=%s", metricsPath))
 		envs = append(envs, fmt.Sprintf("CONVERSION_RESPONSE_PATH=%s", conversionPath))
 		envs = append(envs, fmt.Sprintf("VALIDATING_RESPONSE_PATH=%s", validatingPath))
+		envs = append(envs, fmt.Sprintf("MUTATING_RESPONSE_PATH=%s", mutatingPath))
 		envs = append(envs, fmt.Sprintf("KUBERNETES_PATCH_PATH=%s", kubernetesPatchPath))
 	}
 
@@ -152,6 +160,11 @@ func (h *Hook) Run(bindingType BindingType, context []BindingContext, logLabels 
 	result.ValidatingResponse, err = ValidatingResponseFromFile(validatingPath)
 	if err != nil {
 		return result, fmt.Errorf("got bad validating response: %s", err)
+	}
+
+	result.MutatingResponse, err = MutatingResponseFromFile(mutatingPath)
+	if err != nil {
+		return result, fmt.Errorf("got bad mutating response: %s", err)
 	}
 
 	result.ConversionResponse, err = conversion.ResponseFromFile(conversionPath)
@@ -293,6 +306,16 @@ func (h *Hook) prepareValidatingResponseFile() (string, error) {
 	}
 
 	return validatingPath, nil
+}
+func (h *Hook) prepareMutatingResponseFile() (string, error) {
+	mutatingPath := filepath.Join(h.TmpDir, fmt.Sprintf("hook-%s-mutating-response-%s.json", h.SafeName(), uuid.NewV4().String()))
+
+	err := ioutil.WriteFile(mutatingPath, []byte{}, 0644)
+	if err != nil {
+		return "", err
+	}
+
+	return mutatingPath, nil
 }
 
 func (h *Hook) prepareConversionResponseFile() (string, error) {

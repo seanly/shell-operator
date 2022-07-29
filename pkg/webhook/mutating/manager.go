@@ -55,7 +55,7 @@ func (m *WebhookManager) WithMutatingEventHandler(handler MutatingEventHandlerFn
 
 // Init creates dependencies
 func (m *WebhookManager) Init() error {
-	log.Info("Initialize validating webhooks manager. Load certificates.")
+	log.Info("Initialize mutating webhooks manager. Load certificates.")
 
 	if m.DefaultConfigurationId == "" {
 		m.DefaultConfigurationId = DefaultConfigurationId

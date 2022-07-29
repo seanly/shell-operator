@@ -304,11 +304,10 @@ func (hc *hookController) EnableValidatingBindings() {
 }
 
 func (hc *hookController) EnableMutatingBindings() {
-	if hc.ValidatingController != nil {
-		hc.ValidatingController.EnableValidatingBindings()
+	if hc.MutatingController != nil {
+		hc.MutatingController.EnableMutatingBindings()
 	}
 }
-
 
 func (hc *hookController) EnableConversionBindings() {
 	if hc.ConversionController != nil {
