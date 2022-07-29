@@ -157,10 +157,10 @@ func (op *ShellOperator) InitHookManager() (err error) {
 
 func (op *ShellOperator) InitMutatingWebhookManager() (err error) {
 
-	if op.HookManager == nil || op.ValidatingWebhookManager == nil {
+	if op.HookManager == nil || op.MutatingWebhookManager == nil {
 		return
 	}
-	// Do not init ValidatingWebhook if there are no KubernetesValidating hooks.
+	// Do not init MutatingWebhook if there are no KubernetesMutating hooks.
 	hookNames, _ := op.HookManager.GetHooksInOrder(KubernetesMutating)
 	if len(hookNames) == 0 {
 		return
