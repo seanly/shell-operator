@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/flant/shell-operator/pkg/webhook/mutating"
 	"strconv"
 	"time"
 
@@ -27,6 +28,7 @@ type HookConfigV1 struct {
 	Schedule             []ScheduleConfigV1             `json:"schedule"`
 	OnKubernetesEvent    []OnKubernetesEventConfigV1    `json:"kubernetes"`
 	KubernetesValidating []KubernetesValidatingConfigV1 `json:"kubernetesValidating"`
+	KubernetesMutating   []KubernetesMutatingConfigV1 `json:"kubernetesMutating"`
 	KubernetesConversion []KubernetesConversionConfigV1 `json:"kubernetesCustomResourceConversion"`
 	Settings             *SettingsV1                    `json:"settings"`
 }
@@ -70,8 +72,21 @@ type KubeFieldSelectorV1 FieldSelector
 
 type KubeNamespaceSelectorV1 NamespaceSelector
 
-// version 1 of kubernetes event configuration
+// version 1 of kubernetes validating configuration
 type KubernetesValidatingConfigV1 struct {
+	Name                 string                   `json:"name,omitempty"`
+	IncludeSnapshotsFrom []string                 `json:"includeSnapshotsFrom,omitempty"`
+	Group                string                   `json:"group,omitempty"`
+	Rules                []v1.RuleWithOperations  `json:"rules,omitempty"`
+	FailurePolicy        *v1.FailurePolicyType    `json:"failurePolicy"`
+	LabelSelector        *metav1.LabelSelector    `json:"labelSelector,omitempty"`
+	Namespace            *KubeNamespaceSelectorV1 `json:"namespace,omitempty"`
+	SideEffects          *v1.SideEffectClass      `json:"sideEffects"`
+	TimeoutSeconds       *int32                   `json:"timeoutSeconds,omitempty"`
+}
+
+// version 1 of kubernetes mutating configuration
+type KubernetesMutatingConfigV1 struct {
 	Name                 string                   `json:"name,omitempty"`
 	IncludeSnapshotsFrom []string                 `json:"includeSnapshotsFrom,omitempty"`
 	Group                string                   `json:"group,omitempty"`
@@ -229,6 +244,31 @@ func (cv1 *HookConfigV1) ConvertAndCheck(c *HookConfig) (err error) {
 		return err
 	}
 
+	// Mutating webhooks
+	c.KubernetesMutating = []MutatingConfig{}
+	for i, rawMutating := range c.V1.KubernetesMutating {
+		err := cv1.CheckMutating(c.OnKubernetesEvents, rawMutating)
+		if err != nil {
+			return fmt.Errorf("invalid kubernetesMutating config [%d]: %v", i, err)
+		}
+		mutating, err := cv1.ConvertMutating(rawMutating)
+		if err != nil {
+			return err
+		}
+		c.KubernetesMutating = append(c.KubernetesMutating, mutating)
+	}
+	// Mutate webhooks
+	mutatingWebhooks := []v1.MutatingWebhook{}
+	for _, cfg := range c.KubernetesMutating {
+		mutatingWebhooks = append(mutatingWebhooks, *cfg.Webhook.MutatingWebhook)
+	}
+	err = validation.ValidateMutatingWebhooks(&v1.MutatingWebhookConfiguration{
+		Webhooks: mutatingWebhooks,
+	})
+	if err != nil {
+		return err
+	}
+
 	// Conversion webhooks.
 	c.KubernetesConversion = []ConversionConfig{}
 	for i, rawConversion := range c.V1.KubernetesConversion {
@@ -281,6 +321,15 @@ func (cv1 *HookConfigV1) ConvertAndCheck(c *HookConfig) (err error) {
 		newValidating = append(newValidating, cfg)
 	}
 	c.KubernetesValidating = newValidating
+
+	newMutating := make([]MutatingConfig, 0)
+	for _, cfg := range c.KubernetesMutating {
+		if snapshots, ok := groupSnapshots[cfg.Group]; ok {
+			cfg.IncludeSnapshotsFrom = MergeArrays(cfg.IncludeSnapshotsFrom, snapshots)
+		}
+		newMutating = append(newMutating, cfg)
+	}
+	c.KubernetesMutating = newMutating
 
 	newConversion := make([]ConversionConfig, 0)
 	for _, cfg := range c.KubernetesConversion {
@@ -399,6 +448,35 @@ func (cv1 *HookConfigV1) CheckValidating(kubeConfigs []OnKubernetesEventConfig, 
 	return allErr
 }
 
+
+func (cv1 *HookConfigV1) CheckMutating(kubeConfigs []OnKubernetesEventConfig, cfgV1 KubernetesMutatingConfigV1) (allErr error) {
+	var err error
+
+	if len(cfgV1.IncludeSnapshotsFrom) > 0 {
+		err = CheckIncludeSnapshots(kubeConfigs, cfgV1.IncludeSnapshotsFrom...)
+		if err != nil {
+			allErr = multierror.Append(allErr, fmt.Errorf("includeSnapshotsFrom is invalid: %v", err))
+		}
+	}
+
+	if cfgV1.LabelSelector != nil {
+		_, err := kube_events_manager.FormatLabelSelector(cfgV1.LabelSelector)
+		if err != nil {
+			allErr = multierror.Append(allErr, fmt.Errorf("labelSelector is invalid: %v", err))
+		}
+	}
+
+	if cfgV1.Namespace != nil && cfgV1.Namespace.LabelSelector != nil {
+		_, err := kube_events_manager.FormatLabelSelector(cfgV1.Namespace.LabelSelector)
+		if err != nil {
+			allErr = multierror.Append(allErr, fmt.Errorf("namespace.labelSelector is invalid: %v", err))
+		}
+	}
+
+	return allErr
+}
+
+
 func (cv1 *HookConfigV1) ConvertValidating(cfgV1 KubernetesValidatingConfigV1) (ValidatingConfig, error) {
 	cfg := ValidatingConfig{}
 
@@ -444,6 +522,53 @@ func (cv1 *HookConfigV1) ConvertValidating(cfgV1 KubernetesValidatingConfigV1) (
 
 	return cfg, nil
 }
+
+func (cv1 *HookConfigV1) ConvertMutating(cfgV1 KubernetesMutatingConfigV1) (MutatingConfig, error) {
+	cfg := MutatingConfig{}
+
+	cfg.Group = cfgV1.Group
+	cfg.IncludeSnapshotsFrom = cfgV1.IncludeSnapshotsFrom
+	cfg.BindingName = cfgV1.Name
+
+	DefaultFailurePolicy := v1.Fail
+	DefaultSideEffects := v1.SideEffectClassNone
+	DefaultTimeoutSeconds := int32(10)
+
+	webhook := &v1.MutatingWebhook{
+		Name:  cfgV1.Name,
+		Rules: cfgV1.Rules,
+	}
+	if cfgV1.Namespace != nil {
+		webhook.NamespaceSelector = cfgV1.Namespace.LabelSelector
+	}
+	if cfgV1.LabelSelector != nil {
+		webhook.ObjectSelector = cfgV1.LabelSelector
+	}
+	if cfgV1.FailurePolicy != nil {
+		webhook.FailurePolicy = cfgV1.FailurePolicy
+	} else {
+		webhook.FailurePolicy = &DefaultFailurePolicy
+	}
+	if cfgV1.SideEffects != nil {
+		webhook.SideEffects = cfgV1.SideEffects
+	} else {
+		webhook.SideEffects = &DefaultSideEffects
+	}
+	if cfgV1.TimeoutSeconds != nil {
+		webhook.TimeoutSeconds = cfgV1.TimeoutSeconds
+	} else {
+		webhook.TimeoutSeconds = &DefaultTimeoutSeconds
+	}
+
+	cfg.Webhook = &mutating.MutatingWebhookConfig{
+		MutatingWebhook: webhook,
+	}
+	cfg.Webhook.Metadata.LogLabels = map[string]string{}
+	cfg.Webhook.Metadata.MetricLabels = map[string]string{}
+
+	return cfg, nil
+}
+
 
 func (cv1 *HookConfigV1) CheckConversion(kubeConfigs []OnKubernetesEventConfig, cfgV1 KubernetesConversionConfigV1) (allErr error) {
 	var err error

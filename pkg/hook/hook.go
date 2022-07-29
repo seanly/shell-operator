@@ -216,6 +216,25 @@ func (h *Hook) GetConfigDescription() string {
 		}
 		msgs = append(msgs, fmt.Sprintf("Validate k8s kinds: '%s'", strings.Join(kindList, "', '")))
 	}
+
+	if len(h.Config.KubernetesMutating) > 0 {
+		kinds := map[string]struct{}{}
+		for _, mutating := range h.Config.KubernetesMutating {
+			if mutating.Webhook == nil {
+				continue
+			}
+			for _, rule := range mutating.Webhook.Rules {
+				for _, resource := range rule.Resources {
+					kinds[strings.ToLower(resource)] = struct{}{}
+				}
+			}
+		}
+		kindList := make([]string, 0, len(kinds))
+		for kind := range kinds {
+			kindList = append(kindList, kind)
+		}
+		msgs = append(msgs, fmt.Sprintf("Validate k8s kinds: '%s'", strings.Join(kindList, "', '")))
+	}
 	if len(h.Config.KubernetesConversion) > 0 {
 		crds := map[string]struct{}{}
 		for _, cfg := range h.Config.KubernetesConversion {

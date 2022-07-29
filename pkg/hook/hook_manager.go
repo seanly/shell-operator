@@ -206,6 +206,15 @@ func (hm *hookManager) loadHook(hookPath string) (hook *Hook, err error) {
 		validatingCfg.Webhook.UpdateIds("", validatingCfg.BindingName)
 	}
 
+	for _, mutatingCfg := range hook.GetConfig().KubernetesMutating {
+		mutatingCfg.Webhook.Metadata.LogLabels["hook"] = hook.Name
+		mutatingCfg.Webhook.Metadata.MetricLabels = map[string]string{
+			"hook":    hook.Name,
+			"binding": mutatingCfg.BindingName,
+		}
+		mutatingCfg.Webhook.UpdateIds("", mutatingCfg.BindingName)
+	}
+
 	hookCtrl := controller.NewHookController()
 	hookCtrl.InitKubernetesBindings(hook.GetConfig().OnKubernetesEvents, hm.kubeEventsManager)
 	hookCtrl.InitScheduleBindings(hook.GetConfig().Schedules, hm.scheduleManager)

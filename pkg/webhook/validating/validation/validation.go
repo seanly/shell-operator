@@ -27,6 +27,24 @@ func ValidateValidatingWebhookConfiguration(e *v1.ValidatingWebhookConfiguration
 	return allErrors.ErrorOrNil()
 }
 
+func ValidateMutatingWebhooks(e *v1.MutatingWebhookConfiguration) error {
+	var allErrors *multierror.Error
+
+	hookNames := make(map[string]struct{})
+	for i, hook := range e.Webhooks {
+		allErrors = multierror.Append(allErrors, ValidateMutatingWebhook(&hook, field.NewPath("webhooks").Index(i)))
+		//allErrors = append(allErrors, validateAdmissionReviewVersions(hook.AdmissionReviewVersions, opts.requireRecognizedAdmissionReviewVersion, field.NewPath("webhooks").Index(i).Child("admissionReviewVersions"))...)
+		if len(hook.Name) > 0 {
+			if _, has := hookNames[hook.Name]; has {
+				allErrors = multierror.Append(allErrors, field.Duplicate(field.NewPath("webhooks").Index(i).Child("name"), hook.Name))
+			}
+			hookNames[hook.Name] = struct{}{}
+		}
+	}
+
+	return allErrors.ErrorOrNil()
+}
+
 func ValidateValidatingWebhooks(e *v1.ValidatingWebhookConfiguration) error {
 	var allErrors *multierror.Error
 
@@ -82,6 +100,37 @@ func ValidateValidatingWebhook(hook *v1.ValidatingWebhook, fldPath *field.Path) 
 	//case cc.Service != nil:
 	//	allErrors = multierror.Append(allErrors, webhook.ValidateWebhookService(fldPath.Child("clientConfig").Child("service"), cc.Service.Name, cc.Service.Namespace, cc.Service.Path, cc.Service.Port)...)
 	//}
+	return allErrors
+}
+
+// ValidateMutatingWebhook checks a "webhook" section.
+//
+// "failurePolicy" and "sideEffect" are validated by hook config schema.
+//
+// "clientConfig" and "matchPolicy" are filled in WebhookResource, no need to check.
+//
+// "rules", "timeoutSeconds", "namespaceSelector", "objectSelector" are from hook config.
+func ValidateMutatingWebhook(hook *v1.MutatingWebhook, fldPath *field.Path) error {
+	var allErrors *multierror.Error
+	// hook.Name must be fully qualified
+	allErrors = AppendFieldList(allErrors, utilvalidation.IsFullyQualifiedName(fldPath.Child("name"), hook.Name))
+
+	for i, rule := range hook.Rules {
+		allErrors = AppendFieldList(allErrors, ValidateRuleWithOperations(&rule, fldPath.Child("rules").Index(i)))
+	}
+
+	if hook.TimeoutSeconds != nil && (*hook.TimeoutSeconds > 30 || *hook.TimeoutSeconds < 1) {
+		allErrors = multierror.Append(allErrors, field.Invalid(fldPath.Child("timeoutSeconds"), *hook.TimeoutSeconds, "the timeout value must be between 1 and 30 seconds"))
+	}
+
+	if hook.NamespaceSelector != nil {
+		allErrors = AppendFieldList(allErrors, metav1validation.ValidateLabelSelector(hook.NamespaceSelector, fldPath.Child("namespaceSelector")))
+	}
+
+	if hook.ObjectSelector != nil {
+		allErrors = AppendFieldList(allErrors, metav1validation.ValidateLabelSelector(hook.ObjectSelector, fldPath.Child("objectSelector")))
+	}
+
 	return allErrors
 }
 
