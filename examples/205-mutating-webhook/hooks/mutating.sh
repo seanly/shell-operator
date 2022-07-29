@@ -6,34 +6,32 @@ function __config__(){
     cat <<EOF
 configVersion: v1
 kubernetesMutating:
-- name: inject-nc-sidecar
+- name: inject-pod.opsbox.dev
   namespace:
     labelSelector:
       matchLabels:
-        # helm adds a 'name' label to a namespace it creates
         name: example-205
   rules:
-  - apiGroups:   ["stable.example.com"]
-    apiVersions: ["v1"]
-    operations:  ["CREATE", "UPDATE"]
-    resources:   ["crontabs"]
+  - apiGroups:   [""]
+    apiVersions: ["*"]
+    operations:  ["CREATE"]
+    resources:   ["pods"]
     scope:       "Namespaced"
+
 EOF
 }
 
-function __on_validating::inject-nc-sidecar() {
-  image=$(context::jq -r '.review.request.object.spec.image')
-  echo "Got image: $image"
+function __on_mutating::inject-pod.opsbox.dev() {
 
-  if [[ $image == repo.example.com* ]] ; then
-    cat <<EOF > $VALIDATING_RESPONSE_PATH
-{"allowed":true}
+  cat <<EOF > $MUTATING_RESPONSE_PATH
+{ 
+  "allowed":true, 
+  "patchOps": [
+    {"op": "add", "path": "/spec/nodeSelector", "value": {"hello": "world"}} 
+  ]
+}
 EOF
-  else
-    cat <<EOF > $VALIDATING_RESPONSE_PATH
-{"allowed":false, "message":"Only images from repo.example.com are allowed"}
-EOF
-  fi
+
 }
 
 hook::run $@

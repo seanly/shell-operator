@@ -99,7 +99,7 @@ See example [204-mutating-webhook](./examples/204-mutating-webhook).
 
 > Note that the `group` parameter is only for including snapshots. `kubernetesMutating` hook is never executed on `schedule` or `kubernetes` events with binding context with `"type":"Group"`.
 
-The hook receives a binding context and should return response in `$VALIDATING_RESPONSE_PATH`.
+The hook receives a binding context and should return response in `$MUTATING_RESPONSE_PATH`.
 
 $BINDING_CONTEXT_PATH file example:
 
@@ -183,21 +183,21 @@ $BINDING_CONTEXT_PATH file example:
 
 Response example:
 ```
-cat <<EOF > $VALIDATING_RESPONSE_PATH
+cat <<EOF > $MUTATING_RESPONSE_PATH
 {"allowed": true}
 EOF
 ```
 
 Allow with warnings (Kubernetes 1.19+):
 ```
-cat <<EOF > $VALIDATING_RESPONSE_PATH
+cat <<EOF > $MUTATING_RESPONSE_PATH
 {"allowed": true, "warnings":["It might be risky because it is Tuesday", "It might be risky because your name starts with A"]}
 EOF
 ```
 
 Deny object creation and explain why:
 ```
-cat <<EOF > $VALIDATING_RESPONSE_PATH
+cat <<EOF > $MUTATING_RESPONSE_PATH
 {"allowed": false, "message": "You cannot do this because it is Tuesday and your name starts with A"}
 EOF
 ```
@@ -208,7 +208,7 @@ User will see an error message:
 Error from server: admission webhook "policy.example.com" denied the request: You cannot do this because it is Tuesday and your name starts with A
 ```
 
-Empty or inmut $VALIDATING_RESPONSE_PATH file is considered as `"allowed": false` with a short message about the problem and a more verbose error in the log.
+Empty or inmut $MUTATING_RESPONSE_PATH file is considered as `"allowed": false` with a short message about the problem and a more verbose error in the log.
 
 ## HTTP server and Kubernetes configuration
 
@@ -221,22 +221,22 @@ Command line options:
 ```
   --mutating-webhook-configuration-name="shell-operator-hooks"
                                  A name of a MutatingWebhookConfiguration resource. Can be set with
-                                 $VALIDATING_WEBHOOK_CONFIGURATION_NAME.
+                                 $MUTATING_WEBHOOK_CONFIGURATION_NAME.
   --mutating-webhook-service-name="shell-operator-mutating-svc"
                                  A name of a service used in MutatingWebhookConfiguration. Can be set
-                                 with $VALIDATING_WEBHOOK_SERVICE_NAME.
+                                 with $MUTATING_WEBHOOK_SERVICE_NAME.
   --mutating-webhook-server-cert="/mutating-certs/tls.crt"
                                  A path to a server certificate for service used in
                                  MutatingWebhookConfiguration. Can be set with
-                                 $VALIDATING_WEBHOOK_SERVER_CERT.
+                                 $MUTATING_WEBHOOK_SERVER_CERT.
   --mutating-webhook-server-key="/mutating-certs/tls.key"
                                  A path to a server private key for service used in
                                  MutatingWebhookConfiguration. Can be set with
-                                 $VALIDATING_WEBHOOK_SERVER_KEY.
+                                 $MUTATING_WEBHOOK_SERVER_KEY.
   --mutating-webhook-ca="/mutating-certs/ca.crt"
                                  A path to a ca certificate for MutatingWebhookConfiguration. Can be set
-                                 with $VALIDATING_WEBHOOK_CA.
-  --mutating-webhook-client-ca=VALIDATING-WEBHOOK-CLIENT-CA ...
+                                 with $MUTATING_WEBHOOK_CA.
+  --mutating-webhook-client-ca=MUTATING-WEBHOOK-CLIENT-CA ...
                                  A path to a server certificate for MutatingWebhookConfiguration. Can be
-                                 set with $VALIDATING_WEBHOOK_CLIENT_CA.
+                                 set with $MUTATING_WEBHOOK_CLIENT_CA.
 ```
