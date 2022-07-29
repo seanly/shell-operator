@@ -1,5 +1,3 @@
-crontab-valid.yaml
-crontab-non-valid.yaml
 Dockerfile
 README.md
 gen-certs.sh

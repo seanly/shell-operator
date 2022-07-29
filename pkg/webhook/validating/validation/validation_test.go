@@ -20,6 +20,17 @@ func decodeValidatingFromYaml(inYaml string) *v1.ValidatingWebhookConfiguration 
 	return res
 }
 
+func decodeMutatingFromYaml(inYaml string) *v1.MutatingWebhookConfiguration {
+	res := new(v1.ValidatingWebhookConfiguration)
+
+	err := yaml.Unmarshal([]byte(inYaml), res)
+	if err != nil {
+		panic(err)
+	}
+
+	return res
+}
+
 func Test_Validate(t *testing.T) {
 	g := NewWithT(t)
 
@@ -45,6 +56,35 @@ webhooks:
 	validConf := decodeValidatingFromYaml(validConfYaml)
 
 	err := ValidateValidatingWebhooks(validConf)
+
+	g.Expect(err).ShouldNot(HaveOccurred())
+}
+
+func Test_ValidateMutating(t *testing.T) {
+	g := NewWithT(t)
+
+	mutateConfYaml := `
+#apiVersion: admissionregistration.k8s.io/v1
+#kind: MutatingWebhookConfiguration
+#metadata:
+#  name: "pod-policy.example.com"
+webhooks:
+- name: "pod-policy.example.com"
+  objectSelector:
+    matchLabels:
+      foo: bar
+  rules:
+  - apiGroups:   [""]
+    apiVersions: ["v1"]
+    operations:  ["CREATE"]
+    resources:   ["pods"]
+    scope:       "Namespaced"
+  sideEffects: None
+  timeoutSeconds: 5
+`
+	mutateConf := decodeMutatingFromYaml(mutateConfYaml)
+
+	err := ValidateMutatingWebhooks(mutateConf)
 
 	g.Expect(err).ShouldNot(HaveOccurred())
 }

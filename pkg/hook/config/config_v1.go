@@ -257,7 +257,7 @@ func (cv1 *HookConfigV1) ConvertAndCheck(c *HookConfig) (err error) {
 		}
 		c.KubernetesMutating = append(c.KubernetesMutating, mutating)
 	}
-	// Mutate webhooks
+	// Validate webhooks
 	mutatingWebhooks := []v1.MutatingWebhook{}
 	for _, cfg := range c.KubernetesMutating {
 		mutatingWebhooks = append(mutatingWebhooks, *cfg.Webhook.MutatingWebhook)

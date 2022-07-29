@@ -6,7 +6,7 @@ function __config__(){
     cat <<EOF
 configVersion: v1
 kubernetesMutating:
-- name: inject-pod.opsbox.dev
+- name: inject-pod.example.com
   namespace:
     labelSelector:
       matchLabels:
@@ -21,7 +21,7 @@ kubernetesMutating:
 EOF
 }
 
-function __on_mutating::inject-pod.opsbox.dev() {
+function __on_mutating::inject-pod.example.com() {
 
   cat <<EOF > $MUTATING_RESPONSE_PATH
 { 
